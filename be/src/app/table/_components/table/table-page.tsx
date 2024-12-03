@@ -3,6 +3,7 @@ import { type Column } from "@prisma/client";
 import { type TtableWithRowsAndColumns } from "@/validators/table";
 import { ReactTableVirtualizedInfinite } from "./main1";
 import { transformTableData } from "./helper/transformTableData";
+import { auth } from "@/server/auth";
 
 //TODO:Add correct lodash checks here ( too many nested selectors)
 
@@ -30,9 +31,11 @@ export default async function TablePage({
     const extreactedColumns = extractColumns(data.tableData); // extracts colums from the TableData
     const columnsMetadata = extractColumnMetadata(extreactedColumns); // converts the extracted colums to shape that tanstack table expects
     const transformedTableData = transformTableData(data.tableData); //converts the extracted colums to shape that tanstack table expects
+    const session = await auth()
 
     return (
       <ReactTableVirtualizedInfinite
+        session={session}
         key={Math.random()}
         initialRowCount={data.totalDBRowCount}
         tableId={tableId}

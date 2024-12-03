@@ -22,7 +22,6 @@ const joinMesssageFromRedisTypeZod = z.object({
   }),
 });
 
-// do we really need the roomId here
 export const leaveMessagetypeZod = z.object({
   event: z.literal("leave"),
   roomId: z.string().min(1, {

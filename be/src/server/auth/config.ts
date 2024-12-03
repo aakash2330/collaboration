@@ -13,6 +13,7 @@ import { env } from "@/env";
  */
 declare module "next-auth" {
   interface Session extends DefaultSession {
+    sessionToken:string
     user: {
       id: string;
       // ...other properties
@@ -61,6 +62,7 @@ export const authConfig = {
   adapter: PrismaAdapter(db),
   callbacks: {
     session: ({ session, user }) => {
+      console.log({ session });
       return {
         ...session,
         user: {

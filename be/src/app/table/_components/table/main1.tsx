@@ -23,6 +23,8 @@ import { AddColumn } from "./column/add";
 import { AddRowsBulk } from "./bulk/rows";
 import { AddRow } from "./row/add";
 import { useSearchInputStore } from "@/store/search";
+import { useWebSocket } from "@/ws/provider";
+import { type Session } from "next-auth";
 
 const fetchSize = 50;
 
@@ -30,7 +32,6 @@ const defaultColumn: Partial<ColumnDef<Record<string, CellData>>> = {
   cell: ({ getValue, cell, table }) => {
     const cellData = getValue() as { value: string; cellId: string };
     const initialValue = cellData ? cellData.value : "";
-
     // eslint-disable-next-line
     const [value, setValue] = React.useState(initialValue);
 
@@ -49,6 +50,7 @@ const defaultColumn: Partial<ColumnDef<Record<string, CellData>>> = {
 
     return (
       <input
+        id={cellData.cellId}
         className="bg-transparent focus-visible:outline-none"
         value={value}
         onChange={(e) => {
@@ -65,13 +67,74 @@ export function ReactTableVirtualizedInfinite({
   tableId,
   initialTableData,
   columnsData,
+  session,
 }: {
+  session: Session | null;
   initialRowCount: number;
   initialTableData: Record<string, CellData>[];
   columnsData: Array<ColumnDef<Record<string, CellData>>>;
   tableId: string;
 }) {
-  //we need a reference to the scrolling element for logic down below
+  const { message, sendWsMessage } = useWebSocket();
+  useEffect(() => {
+    if (!session) {
+      return;
+    }
+    sendWsMessage({
+      event: "join",
+      token: session.sessionToken,
+      roomId: tableId,
+    });
+
+    return () => {
+      sendWsMessage({
+        event: "leave",
+        roomId: tableId,
+      });
+    };
+  }, [sendWsMessage, session, tableId]);
+
+  useEffect(() => {
+    console.log({ message });
+    if (!message) {
+      return;
+    }
+    //NOTE:Why isnt this working
+    // if (message.event === "modify-cell") {
+    //   console.log({ cellId: message.data.cellId });
+    //   //find the cell being modified
+    //   const cell = document.getElementById(
+    //     message.data.cellId,
+    //   ) as HTMLInputElement;
+    //   if (cell && cell.tagName === "INPUT") {
+    //     cell.value = message.data.value;
+    //   }
+    //   console.log({ cell });
+    // }
+    //
+
+    if (message.event === "modify-cell") {
+      const updatedRows = flatData.map((row) => {
+        console.log({ row });
+        const column = Object.entries(row).find(([key, value]) => {
+          if (typeof value == "object") {
+            return value.cellId === message.data.cellId;
+          }
+        });
+        if (column) {
+          row = {
+            ...row,
+            [column[0]]: { ...column[1], value: message.data.value },
+          };
+        }
+        console.log({ foundCol: column });
+        return row;
+      });
+
+      setFlatData(updatedRows);
+    }
+  }, [message]);
+
   const utils = api.useUtils();
   const tableContainerRef = React.useRef<HTMLDivElement>(null);
   const filterText = useSearchInputStore((state) => state.searchInput);
@@ -133,7 +196,7 @@ export function ReactTableVirtualizedInfinite({
         filters: { search: debouncedFilterText },
       });
       const transformedData = transformTableData(fetchedData.tableData);
-      setTotalDBRowCount(Infinity);
+      setTotalDBRowCount(totalDBRowCount);
       return transformedData;
     },
     initialPageParam: 0,
@@ -192,7 +255,7 @@ export function ReactTableVirtualizedInfinite({
     [fetchNextPage, isFetching, totalFetched, totalDBRowCount],
   );
 
-  const updateCellMutation = api.table.updateCell.useMutation();
+  //const updateCellMutation = api.table.updateCell.useMutation();
 
   const updateData = (rowIndex: number, columnId: string, value: unknown) => {
     const rowData = flatData[rowIndex];
@@ -202,6 +265,7 @@ export function ReactTableVirtualizedInfinite({
     }
 
     const cellData = rowData[columnId];
+    console.log({ cellData });
 
     if (!cellData) {
       console.error(
@@ -218,7 +282,11 @@ export function ReactTableVirtualizedInfinite({
       //   { cellId, value: value as string },
       // ]);
     } else {
-      updateCellMutation.mutate({ cellId, value: value as string });
+      sendWsMessage({
+        event: "modify-cell",
+        data: { cellId, sheetId: tableId, value: value as string },
+      });
+      //updateCellMutation.mutate({ cellId, value: value as string });
     }
   };
 

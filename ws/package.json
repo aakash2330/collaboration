@@ -10,6 +10,7 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@paralleldrive/cuid2": "^2.2.2",
     "@prisma/client": "^5.14.0",
     "@types/lodash": "^4.17.13",
     "@types/ws": "^8.5.13",
