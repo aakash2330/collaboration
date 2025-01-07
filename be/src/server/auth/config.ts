@@ -13,7 +13,7 @@ import { env } from "@/env";
  */
 declare module "next-auth" {
   interface Session extends DefaultSession {
-    sessionToken:string
+    sessionToken: string;
     user: {
       id: string;
       // ...other properties

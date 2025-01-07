@@ -4,13 +4,13 @@ const prisma = new PrismaClient();
 
 async function main() {
   async function a() {
-    const userId = "cm3t9mfob0000fnmdjiig4mo6"; // Replace this with the user ID
+    const ownerId = "cm3t9mfob0000fnmdjiig4mo6"; // Replace this with the user ID
 
     // Step 1: Create a workspace
     const workspace = await prisma.workspace.create({
       data: {
         name: "Workspace 1",
-        userId,
+        ownerId,
       },
     });
     console.log(`Created Workspace: ${workspace.id}`);
@@ -68,13 +68,13 @@ async function main() {
   }
 
   async function b() {
-    const userId = "cm3t9mfob0000fnmdjiig4mo6"; // Replace this with the user ID
+    const ownerId = "cm3t9mfob0000fnmdjiig4mo6"; // Replace this with the user ID
 
     // Step 1: Create a workspace
     const workspace = await prisma.workspace.create({
       data: {
         name: "Workspace 2",
-        userId,
+        ownerId,
       },
     });
     console.log(`Created Workspace: ${workspace.id}`);

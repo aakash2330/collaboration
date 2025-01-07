@@ -1,6 +1,11 @@
+"use client";
+
 import { ToolTipMain } from "@/components/tooltip/main";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { api } from "@/trpc/react";
+import { shareWorkspaceOutputZod } from "@/validators/workspace";
+import _ from "lodash";
 import {
   Bell,
   ChevronDown,
@@ -10,6 +15,7 @@ import {
   Users,
 } from "lucide-react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 export const navMenuDataLeft = [
   {
@@ -95,15 +101,7 @@ export const navMenuDataRight = [
   },
   {
     id: "right-nav-3",
-    render: (
-      <Button
-        size="xs"
-        className="flex items-center justify-center rounded-full bg-neutral-100 hover:bg-white"
-      >
-        <Users color="#c50935"></Users>
-        <p className="text-table-primary">Share</p>
-      </Button>
-    ),
+    render: <ShareWorkspaceButton></ShareWorkspaceButton>,
   },
   {
     id: "right-nav-4",
@@ -138,5 +136,34 @@ export function NavMenuItem({ children }: { children: JSX.Element }) {
     <div className="flex items-center justify-center rounded-full px-3 py-1 hover:cursor-pointer hover:bg-table-secondary">
       {children}
     </div>
+  );
+}
+
+export function ShareWorkspaceButton() {
+  const pathname = usePathname();
+  const shareInvitationMutation = api.workspace.shareWorkspace.useMutation({
+    onSuccess: async ({ shareableUrl }) => {
+      await navigator.clipboard.writeText(shareableUrl);
+      alert("link copied to clipboard");
+    },
+    onError: () => {
+      alert("unable to generate an invitation link");
+    },
+  });
+  return (
+    <Button
+      onClick={() => {
+        const workspaceId = pathname.split("/")[2];
+        if (_.isEmpty(workspaceId)) {
+          return;
+        }
+        shareInvitationMutation.mutate({ workspaceId: workspaceId! });
+      }}
+      size="xs"
+      className="flex items-center justify-center rounded-full bg-neutral-100 hover:bg-white"
+    >
+      <Users color="#c50935"></Users>
+      <p className="text-table-primary">Share Workspace</p>
+    </Button>
   );
 }

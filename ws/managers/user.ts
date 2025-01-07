@@ -17,6 +17,7 @@ export class User {
   public roomId: string | undefined;
   public userId: string | undefined;
   public id: string;
+
   constructor({
     ws,
     userId,
@@ -87,10 +88,15 @@ export class User {
     if (!this.roomId) {
       throw new Error("User doesnt belong to a room");
     }
+
+    // you done need to the changes , just apply the updates to the doc and it'll automatically publish the updated document , because we used redis persistance from y-redis
     RedisManager.getInstance().publish({
       message: JSON.stringify({ ...message, userId: this.userId }),
       channel: this.roomId,
     });
+    //publish as well as add in a queue
+    //after every 10 second interval , empty the queue and operation transform those results
+    //reslts to db
   }
 
   private async handleUserJoin(message: TjoinMessageTypeZod) {
@@ -102,6 +108,7 @@ export class User {
       throw new Error("No UserId Found");
     }
     this.userId = userId;
+    // add user to the room
     RoomManager.getInstance().addUser({ user: this, roomId });
 
     if (!this.roomId) {

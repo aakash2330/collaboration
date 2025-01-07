@@ -17,6 +17,12 @@ export const env = createEnv({
     NODE_ENV: z
       .enum(["development", "test", "production"])
       .default("development"),
+    LINK_EXPIRE_DURATION: z
+      .string()
+      .default((2 * 24 * 60 * 60 * 1000).toString())
+      .transform((data) => {
+        return parseInt(data);
+      }),
   },
 
   /**
@@ -29,6 +35,7 @@ export const env = createEnv({
     NEXT_PUBLIC_WS_URL: z.string().min(1, {
       message: "NEXT_PUBLIC_WS_URL size should be > 1",
     }),
+    NEXT_PUBLIC_URL: z.string().min(1).default("http://localhost:3000"),
   },
 
   /**
@@ -36,6 +43,8 @@ export const env = createEnv({
    * middlewares) or client-side so we need to destruct manually.
    */
   runtimeEnv: {
+    NEXT_PUBLIC_URL: process.env.NEXT_PUBLIC_URL,
+    LINK_EXPIRE_DURATION: process.env.LINK_EXPIRE_DURATION,
     AUTH_SECRET: process.env.AUTH_SECRET,
     GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID,
     GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET,

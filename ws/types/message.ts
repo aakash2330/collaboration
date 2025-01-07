@@ -22,7 +22,6 @@ const joinMesssageFromRedisTypeZod = z.object({
   }),
 });
 
-// do we really need the roomId here
 export const leaveMessagetypeZod = z.object({
   event: z.literal("leave"),
   roomId: z.string().min(1, {
@@ -44,15 +43,7 @@ export const leaveMessageFromRedistypeZod = z.object({
 
 const cellModifyTypeZod = z.object({
   event: z.literal("modify-cell"),
-  data: z.object({
-    cellId: z.string().min(1, {
-      message: "Cell Id size should be > 1",
-    }),
-    sheetId: z.string().min(1, {
-      message: "Sheet Id size should be > 1",
-    }),
-    value: z.string(),
-  }),
+  data: z.instanceof(Uint8Array),
 });
 
 export type TcellModifyTypeZod = z.infer<typeof cellModifyTypeZod>;

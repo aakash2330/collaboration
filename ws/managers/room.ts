@@ -1,13 +1,15 @@
 import { User } from "./user";
 import _ from "lodash";
+import * as Y from "yjs";
 import {
   messageFromRedisTypeZod,
   TmessageFromRedisTypeZod,
 } from "../types/message";
 import { createClient, RedisClientType } from "redis";
+import { RedisManager } from "./redis";
 
 export class RoomManager {
-  private rooms: Map<string, User[]>;
+  private rooms: Map<string, { ydoc: Y.Doc; users: User[] }>;
   private static instance: RoomManager;
   private subscriber: RedisClientType;
 
@@ -42,21 +44,31 @@ export class RoomManager {
     this.subscriber.unsubscribe(channel);
   }
 
-  public addUser({ user, roomId }: { user: User; roomId: string }) {
+  public async addUser({ user, roomId }: { user: User; roomId: string }) {
     if (!this.rooms.has(roomId)) {
-      this.rooms.set(roomId, [user]);
+      this.rooms.set(roomId, {
+        // the first time a room is created , a new ydoc is attached to it which is shared by all the users to perform updates , which is also synched with redis persistance from y-redis
+        ydoc: await (async () => {
+          const ydoc = new Y.Doc();
+          // after the ydoc is bound to redis , each change in this doc will be automatically published to redis
+          RedisManager.getInstance().bindYdocToRedis({ channel: roomId, ydoc });
+          return ydoc;
+        })(),
+        users: [user],
+      });
+
       this.subscribe({ channel: roomId });
       console.log(`subscribing to channel ${roomId} `);
     } else {
       //also check if user is already part of that praticular
-      const users = this.rooms.get(roomId);
-      if (users) {
-        const foundUser = users.find((u) => u.id === user.id);
+      const roomData = this.rooms.get(roomId);
+      if (roomData?.users) {
+        const foundUser = roomData.users.find((u) => u.id === user.id);
         if (foundUser) {
           console.error("user is already there in the room");
           return;
         } else {
-          this.rooms.get(roomId)?.push(user);
+          this.rooms.get(roomId)?.users.push(user);
         }
       }
     }
@@ -71,13 +83,13 @@ export class RoomManager {
       console.log(`no room present with roomId - ${roomId}`);
       return;
     }
-    const users = this.rooms.get(roomId);
+    const roomData = this.rooms.get(roomId);
 
-    if (!users) {
+    if (!roomData?.users) {
       console.log(`no users present in roomId - ${roomId}`);
       return;
     }
-    const filteredUsers = users.filter((u) => u.id !== user.id);
+    const filteredUsers = roomData.users.filter((u) => u.id !== user.id);
     user.roomId = undefined;
 
     if (_.isEmpty(filteredUsers)) {
@@ -92,7 +104,7 @@ export class RoomManager {
       );
       return;
     }
-    this.rooms.set(roomId, filteredUsers);
+    this.rooms.set(roomId, { ...roomData, users: filteredUsers });
   }
 
   //this function is to be passed to the redis so it can use it as a callback
@@ -109,9 +121,9 @@ export class RoomManager {
     if (!this.rooms.has(roomId)) {
       return;
     }
-    const users = this.rooms.get(roomId);
+    const roomData = this.rooms.get(roomId);
 
-    if (!users) {
+    if (!roomData?.users) {
       console.log(`no users present in roomId - ${roomId}`);
       return;
     }
@@ -122,7 +134,7 @@ export class RoomManager {
     //    }
     //  });
 
-    users.forEach((u) => {
+    roomData.users.forEach((u) => {
       u.emit(JSON.stringify(message));
     });
   }

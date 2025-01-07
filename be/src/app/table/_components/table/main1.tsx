@@ -25,6 +25,7 @@ import { AddRow } from "./row/add";
 import { useSearchInputStore } from "@/store/search";
 import { useWebSocket } from "@/ws/provider";
 import { type Session } from "next-auth";
+import { useYdoc } from "./ydoc/useYdoc";
 
 const fetchSize = 50;
 
@@ -99,8 +100,8 @@ export function ReactTableVirtualizedInfinite({
     if (!message) {
       return;
     }
-    //NOTE:Why isnt this working
-    // if (message.event === "modify-cell") {
+    //Why isnt this working
+    // if (message.event === "mzzodify-cell") {
     //   console.log({ cellId: message.data.cellId });
     //   //find the cell being modified
     //   const cell = document.getElementById(
@@ -256,6 +257,8 @@ export function ReactTableVirtualizedInfinite({
   );
 
   //const updateCellMutation = api.table.updateCell.useMutation();
+  //
+  const { ydoc } = useYdoc();
 
   const updateData = (rowIndex: number, columnId: string, value: unknown) => {
     const rowData = flatData[rowIndex];
@@ -282,10 +285,10 @@ export function ReactTableVirtualizedInfinite({
       //   { cellId, value: value as string },
       // ]);
     } else {
-      sendWsMessage({
-        event: "modify-cell",
-        data: { cellId, sheetId: tableId, value: value as string },
-      });
+      ydoc.transact(() => {
+        ydoc.getMap().set(cellId, value);
+      }, "non-silent");
+
       //updateCellMutation.mutate({ cellId, value: value as string });
     }
   };
