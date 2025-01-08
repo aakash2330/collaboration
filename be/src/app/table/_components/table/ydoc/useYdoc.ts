@@ -12,8 +12,16 @@ export function useYdoc() {
   useEffect(() => {
     if (message?.event == "modify-cell") {
       ydoc.transact(() => {
-        ydoc.getMap().set(message.data.cellId, message.data.value);
+        console.log("silently applying update");
+        Y.applyUpdate(ydoc, new Uint8Array(message.data));
       }, "silent");
+    }
+
+    // get initial data from the room's doc
+    if (message?.event == "initial-data") {
+      Object.entries(message.data).forEach(([key, value]) => {
+        ydoc.getMap().set(key, value);
+      });
     }
   }, [message, ydoc]);
 
@@ -21,13 +29,16 @@ export function useYdoc() {
     ydoc.on(
       "update",
       (update, origin: "silent" | "non-silent" = "non-silent") => {
-        console.log("Silently Received update:", { update, origin });
         if (origin === "silent") {
+          console.log("Silently Received update:", { update, origin });
           return;
         }
+        console.log("Received Non-silent update:", { update, origin });
+        console.log({ update });
+
         sendWsMessage({
           event: "modify-cell",
-          data: update,
+          data: Array.from(update),
         });
       },
     );

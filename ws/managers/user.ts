@@ -1,12 +1,12 @@
 import _ from "lodash";
 import { verifySessionAndGetUserId } from "../lib/verify-session";
 import { createId } from "@paralleldrive/cuid2";
+import * as Y from "yjs";
 import {
   messageTypeZod,
   TcellModifyTypeZod,
   TjoinMessageTypeZod,
   TleaveMessagetypeZod,
-  TmessageTypeZod,
 } from "../types/message";
 import { WebSocket } from "ws";
 import { RedisManager } from "./redis";
@@ -52,7 +52,6 @@ export class User {
     });
 
     this.ws.on("message", async (data) => {
-      console.log("received -", JSON.parse(data.toString()));
       try {
         const jsonifiedData = JSON.parse(data.toString());
         const messageData = messageTypeZod.safeParse(jsonifiedData);
@@ -81,22 +80,24 @@ export class User {
   }
 
   public emit(message: string) {
+    // parse the message before sending
     this.ws.send(message);
   }
 
   private handleModifyCell(message: TcellModifyTypeZod) {
     if (!this.roomId) {
-      throw new Error("User doesnt belong to a room");
+      console.log("User doesnt belong to a room");
+      return;
     }
 
-    // you done need to the changes , just apply the updates to the doc and it'll automatically publish the updated document , because we used redis persistance from y-redis
+    // find the room -> ydoc that the current user is a part of
+    const ydoc = RoomManager.getInstance().getYdocByRoomId(this.roomId);
+    ydoc && Y.applyUpdate(ydoc, new Uint8Array(message.data));
+
     RedisManager.getInstance().publish({
       message: JSON.stringify({ ...message, userId: this.userId }),
       channel: this.roomId,
     });
-    //publish as well as add in a queue
-    //after every 10 second interval , empty the queue and operation transform those results
-    //reslts to db
   }
 
   private async handleUserJoin(message: TjoinMessageTypeZod) {
@@ -109,7 +110,7 @@ export class User {
     }
     this.userId = userId;
     // add user to the room
-    RoomManager.getInstance().addUser({ user: this, roomId });
+    await RoomManager.getInstance().addUser({ user: this, roomId });
 
     if (!this.roomId) {
       throw new Error("User doesnt belong to a room");
@@ -135,3 +136,14 @@ export class User {
     });
   }
 }
+
+//code snippet to convert uint8 array to a normal string
+//const uint8ArrayValues = Object.values(update);
+//const byteArray = new Uint8Array(uint8ArrayValues);
+
+//// Step 2: Decode the Uint8Array to a string
+//const decoder = new TextDecoder("utf-8"); // Use UTF-8 encoding
+//const decodedString = decoder.decode(byteArray);
+
+//// Output the decoded string
+//console.log({ decodedString });

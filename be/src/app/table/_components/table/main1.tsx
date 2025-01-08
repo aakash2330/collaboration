@@ -77,6 +77,7 @@ export function ReactTableVirtualizedInfinite({
   tableId: string;
 }) {
   const { message, sendWsMessage } = useWebSocket();
+
   useEffect(() => {
     if (!session) {
       return;
@@ -95,48 +96,6 @@ export function ReactTableVirtualizedInfinite({
     };
   }, [sendWsMessage, session, tableId]);
 
-  useEffect(() => {
-    console.log({ message });
-    if (!message) {
-      return;
-    }
-    //Why isnt this working
-    // if (message.event === "mzzodify-cell") {
-    //   console.log({ cellId: message.data.cellId });
-    //   //find the cell being modified
-    //   const cell = document.getElementById(
-    //     message.data.cellId,
-    //   ) as HTMLInputElement;
-    //   if (cell && cell.tagName === "INPUT") {
-    //     cell.value = message.data.value;
-    //   }
-    //   console.log({ cell });
-    // }
-    //
-
-    if (message.event === "modify-cell") {
-      const updatedRows = flatData.map((row) => {
-        console.log({ row });
-        const column = Object.entries(row).find(([key, value]) => {
-          if (typeof value == "object") {
-            return value.cellId === message.data.cellId;
-          }
-        });
-        if (column) {
-          row = {
-            ...row,
-            [column[0]]: { ...column[1], value: message.data.value },
-          };
-        }
-        console.log({ foundCol: column });
-        return row;
-      });
-
-      setFlatData(updatedRows);
-    }
-  }, [message]);
-
-  const utils = api.useUtils();
   const tableContainerRef = React.useRef<HTMLDivElement>(null);
   const filterText = useSearchInputStore((state) => state.searchInput);
   const debouncedFilterText = useDebounce(filterText, 300);
@@ -259,6 +218,35 @@ export function ReactTableVirtualizedInfinite({
   //const updateCellMutation = api.table.updateCell.useMutation();
   //
   const { ydoc } = useYdoc();
+
+  useEffect(() => {
+    const updateRows = () => {
+      const ydocData = ydoc.getMap().toJSON();
+      console.log({ ydocData });
+      const updatedRows = flatData.map((row) => {
+        console.log({ row });
+        console.log(" ------------------------------------");
+        Object.entries(row).forEach(([key, value]) => {
+          if (
+            typeof value === "object" &&
+            ydocData[value.cellId] !== undefined
+          ) {
+            console.log(`found a row with id ${value.cellId}`);
+            console.log({
+              cellId: value.cellId,
+              value: ydocData[value.cellId],
+            });
+            row[key] = { ...value, value: ydocData[value.cellId] };
+          }
+        });
+        return row;
+      });
+
+      setFlatData(updatedRows);
+    };
+
+    ydoc.on("update", updateRows);
+  }, [ydoc, flatData]);
 
   const updateData = (rowIndex: number, columnId: string, value: unknown) => {
     const rowData = flatData[rowIndex];

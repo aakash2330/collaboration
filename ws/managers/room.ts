@@ -7,16 +7,22 @@ import {
 } from "../types/message";
 import { createClient, RedisClientType } from "redis";
 import { RedisManager } from "./redis";
+import { db } from "../prisma/prisma-client";
+import { Cell } from "@prisma/client";
 
 export class RoomManager {
   private rooms: Map<string, { ydoc: Y.Doc; users: User[] }>;
   private static instance: RoomManager;
   private subscriber: RedisClientType;
+  private redisClient: RedisClientType;
 
   constructor() {
     this.rooms = new Map();
     this.subscriber = createClient();
     this.subscriber.connect();
+
+    this.redisClient = createClient();
+    this.redisClient.connect();
   }
   public static getInstance() {
     if (!this.instance) {
@@ -30,13 +36,17 @@ export class RoomManager {
       const parsedMessage = messageFromRedisTypeZod.safeParse(
         JSON.parse(message),
       );
+
       if (!parsedMessage.success) {
+        console.log(JSON.stringify(parsedMessage.error));
         return;
       }
       RoomManager.getInstance().broadcastMessageToUsersInRoom({
         roomId: channel,
         message: parsedMessage.data,
       });
+      if (parsedMessage.data.event == "join") {
+      }
     });
   }
 
@@ -46,19 +56,17 @@ export class RoomManager {
 
   public async addUser({ user, roomId }: { user: User; roomId: string }) {
     if (!this.rooms.has(roomId)) {
-      this.rooms.set(roomId, {
-        // the first time a room is created , a new ydoc is attached to it which is shared by all the users to perform updates , which is also synched with redis persistance from y-redis
-        ydoc: await (async () => {
-          const ydoc = new Y.Doc();
-          // after the ydoc is bound to redis , each change in this doc will be automatically published to redis
-          RedisManager.getInstance().bindYdocToRedis({ channel: roomId, ydoc });
-          return ydoc;
-        })(),
-        users: [user],
-      });
+      const ydoc = new Y.Doc();
+      //check if the instance is already bound
 
       this.subscribe({ channel: roomId });
       console.log(`subscribing to channel ${roomId} `);
+
+      this.rooms.set(roomId, {
+        // the first time a room is created , a new ydoc is attached to it which is shared by all the users to perform updates , which is also synched with redis persistance from y-redis
+        ydoc: ydoc,
+        users: [user],
+      });
     } else {
       //also check if user is already part of that praticular
       const roomData = this.rooms.get(roomId);
@@ -74,11 +82,22 @@ export class RoomManager {
     }
     // associate the user to that roomId
     user.roomId = roomId;
+
+    // also send the doc udpates to the user
+    user.emit(
+      JSON.stringify({
+        event: "initial-data",
+        //maybe replace this with getStateAsUpdade function from yjs
+        data: this.rooms.get(roomId)?.ydoc.getMap(),
+      }),
+    );
+
+    console.log(`here is the room id ${roomId}`);
     return;
   }
 
   //room id required in case we allow a user to be a part of multiple rooms
-  public removeUser({ user, roomId }: { user: User; roomId: string }) {
+  public async removeUser({ user, roomId }: { user: User; roomId: string }) {
     if (!this.rooms.has(roomId)) {
       console.log(`no room present with roomId - ${roomId}`);
       return;
@@ -93,6 +112,10 @@ export class RoomManager {
     user.roomId = undefined;
 
     if (_.isEmpty(filteredUsers)) {
+      //after the room has no users , just dump the updates in db
+      const ydoc = this.rooms.get(roomId)?.ydoc;
+      ydoc && (await dumpDocUpdatesToDb(ydoc.getMap().toJSON()));
+
       this.rooms.delete(roomId);
       this.unsubscribe({ channel: roomId });
       console.log(
@@ -105,6 +128,10 @@ export class RoomManager {
       return;
     }
     this.rooms.set(roomId, { ...roomData, users: filteredUsers });
+  }
+
+  public getYdocByRoomId(roomId: string): Y.Doc | undefined {
+    return this.rooms.get(roomId)?.ydoc;
   }
 
   //this function is to be passed to the redis so it can use it as a callback
@@ -138,4 +165,21 @@ export class RoomManager {
       u.emit(JSON.stringify(message));
     });
   }
+}
+
+async function dumpDocUpdatesToDb(data: Record<string, string>) {
+  console.log("dumping updates to db");
+  const transactionPromises: Promise<Cell>[] = [];
+
+  await db.$transaction(async (prisma) => {
+    Object.entries(data).forEach(async ([cellId, value]) => {
+      transactionPromises.push(
+        prisma.cell.update({
+          where: { id: cellId },
+          data: { value },
+        }),
+      );
+    });
+    await Promise.all(transactionPromises);
+  });
 }

@@ -43,36 +43,44 @@ export const leaveMessageFromRedistypeZod = z.object({
 
 const cellModifyTypeZod = z.object({
   event: z.literal("modify-cell"),
-  data: z.instanceof(Uint8Array),
+  data: z.array(z.number()),
 });
 
 export type TcellModifyTypeZod = z.infer<typeof cellModifyTypeZod>;
+
+const initialDataZod = z.object({
+  event: z.literal("initial-data"),
+  data: z.record(z.string()),
+});
+
+export type TinitialDataZod = z.infer<typeof initialDataZod>;
+
+export const initialDataFromRedisZod = z.object({
+  event: z.literal("initial-data"),
+  data: z.record(z.string()),
+});
+
+export type TinitialDataFromRedisZod = z.infer<typeof initialDataFromRedisZod>;
 
 const cellModifyFromRedisTypeZod = z.object({
   event: z.literal("modify-cell"),
   userId: z.string().min(1, {
     message: "User Id size should be > 1",
   }),
-  data: z.object({
-    cellId: z.string().min(1, {
-      message: "Cell Id size should be > 1",
-    }),
-    sheetId: z.string().min(1, {
-      message: "Sheet Id size should be > 1",
-    }),
-    value: z.string(),
-  }),
+  data: z.array(z.number()),
 });
 
 export const messageTypeZod = z.union([
   joinMesssageTypeZod,
   cellModifyTypeZod,
   leaveMessagetypeZod,
+  initialDataZod,
 ]);
 
 export type TmessageTypeZod = z.infer<typeof messageTypeZod>;
 
 export const messageFromRedisTypeZod = z.union([
+  initialDataFromRedisZod,
   cellModifyFromRedisTypeZod,
   joinMesssageFromRedisTypeZod,
   leaveMessageFromRedistypeZod,
